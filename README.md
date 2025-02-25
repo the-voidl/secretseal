@@ -25,7 +25,7 @@ Annoyed of handling sealed secrets in your kubernetes cluster? This tool is for 
 ## Basic usage
 
 ```bash
-./secretseal.sh <sealed-secret-file> -c <path-to-sealed-secrets-certificate>
+./secretseal.py <sealed-secret-file> -c <path-to-sealed-secrets-certificate>
 ```
 1. Edit the secrets
 2. Save and exit
