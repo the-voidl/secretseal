@@ -15,7 +15,7 @@ Annoyed of handling sealed secrets in your kubernetes cluster? This tool is for 
 
 - You have direct access to the kubernetes cluster through kubectl
 - You use a git-first workflow
-- You use [bitnamis sealed secrets](https://github.com/bitnami-labs/sealed-secrets)
+- You use [bitnami's sealed secrets](https://github.com/bitnami-labs/sealed-secrets)
 
 ## Requirements
 
@@ -54,11 +54,11 @@ Our git repository is structured as follows:
 ```
 My workflow so far was:
 1. I get the certificate from the cluster by running `kubeseal --fetch-cert --controller-namespace <namespace> > crt.tls`
-2. I obtain the decrypted secret from the cluster
+2. I obtain the decrypted secret(s) from the cluster
 3. I edit the secret
-4. If some keys are json, I copy the json data to a temporary file
+4. If some keys are json, I copy the json data to a temporary file to have highlighting and linting
 5. I copy all values back to one file
-6. I create a secret with `kubectl create secret generic mail-secrets --from-file=secret.json --from-string=FOO=bar --dry-run=client -o yaml > application-secrets-palin.yaml`
+6. I create a secret with `kubectl create secret generic mail-secrets --from-file=secret.json --dry-run=client -o yaml > application-secrets-plain.yaml`
 7. I encrypt the secret with `kubeseal --cert crt.tls < application-secrets-plain.yaml > application-secrets.yaml`
 
 Now I can do all of this with two commands when in the `k8s/cluster1/namespace1` directory:
