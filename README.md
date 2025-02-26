@@ -74,6 +74,6 @@ kubeseal --fetch-cert --controller-namespace <namespace> > ../crt.tls
 
 - This script will overwrite the original sealed secret file
 - Edited secrets won't be applied to the cluster automatically -> git-first workflow
-- You cannot edit a secret interatively, since the actual secrets are read from the cluster
+- You cannot edit a secret iteratively, since the actual secrets are read from the cluster
 - This will not be actively maintained
 
