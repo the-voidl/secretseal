@@ -104,9 +104,7 @@ def editInteractively(secrets):
                     if answer.lower() == "y":
                         edited = editFile(value, fileEnding=".json")
                         secret["data"][key] = edited
-                        result.append(secret)
                         oneEdited = True
-                        break
 
                 elif key.endswith(".xml"):
                     print(f"Found XML data \033[1m{key}\033[0m in secret {secret['metadata']['name']}")
@@ -114,11 +112,8 @@ def editInteractively(secrets):
                     if answer.lower() == "y":
                         edited = editFile(value, fileEnding=".xml")
                         secret["data"][key] = edited
-                        result.append(secret)
                         oneEdited = True
-                        break
-        else:
-            result.append(secret)
+        result.append(secret)
 
     yamlString = yaml.safe_dump_all(result, sort_keys=False)
 

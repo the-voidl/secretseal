@@ -67,6 +67,9 @@ kubeseal --fetch-cert --controller-namespace <namespace> > ../crt.tls
 ./secretseal.py edit application-secrets.yaml
 ```
 
+### Demo
+![](./demo.gif)
+
 ## Warnings
 
 - This script will overwrite the original sealed secret file
