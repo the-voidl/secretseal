@@ -91,21 +91,32 @@ def editInteractively(secrets):
     editNoMore = False
     for secret in secrets:
         for key, value in secret["data"].items():
-            if key.endswith(".json") and not editNoMore:
+            if not editNoMore:
                 if oneEdited:
                     answer = input("Edit further keys isolated? (Y/n) ")
                     if answer.lower() == "n":
                         editNoMore = True
                         break
 
-                print(f"Found JSON data \033[1m{key}\033[0m in secret {secret['metadata']['name']}")
-                answer = input("Edit this key isolated? (y/N) ")
-                if answer.lower() == "y":
-                    edited = editFile(value, fileEnding=".json")
-                    secret["data"][key] = edited
-                    result.append(secret)
-                    oneEdited = True
-                    break
+                if key.endswith(".json"):
+                    print(f"Found JSON data \033[1m{key}\033[0m in secret {secret['metadata']['name']}")
+                    answer = input("Edit this key isolated? (y/N) ")
+                    if answer.lower() == "y":
+                        edited = editFile(value, fileEnding=".json")
+                        secret["data"][key] = edited
+                        result.append(secret)
+                        oneEdited = True
+                        break
+
+                elif key.endswith(".xml"):
+                    print(f"Found XML data \033[1m{key}\033[0m in secret {secret['metadata']['name']}")
+                    answer = input("Edit this key isolated? (y/N) ")
+                    if answer.lower() == "y":
+                        edited = editFile(value, fileEnding=".xml")
+                        secret["data"][key] = edited
+                        result.append(secret)
+                        oneEdited = True
+                        break
         else:
             result.append(secret)
 
@@ -180,11 +191,11 @@ def edit(args):
     secrets = []
     with open(sealedSecretsFile, "r") as f:
         try:
-            file_str = f.read()
-            if not file_str or file_str.isspace():
+            fileStr = f.read()
+            if not fileStr or fileStr.isspace():
                 printColorful(f"File '{sealedSecretsFile}' is empty.", 'red')
                 sys.exit(1)
-            secrets = yaml.safe_load_all(file_str)
+            secrets = yaml.safe_load_all(fileStr)
         except Exception as e:
             printColorful(f"Error parsing YAML: {e}", 'red')
             sys.exit(1)
