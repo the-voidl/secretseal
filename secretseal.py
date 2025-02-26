@@ -189,11 +189,16 @@ def edit(args):
             printColorful(f"Error parsing YAML: {e}", 'red')
             sys.exit(1)
 
-    if not any(secret.get("kind") == "SealedSecret" for secret in secrets):
+    secretsArray = []
+    for secret in secrets:
+        if secret.get("kind") == "SealedSecret":
+            secretsArray.append(secret)
+
+    if not any(secretsArray):
         printColorful("No secrets found in the YAML file.", 'red')
         sys.exit(1)
 
-    allSecrets = getSecretsFromK8s(secrets)
+    allSecrets = getSecretsFromK8s(secretsArray)
 
     edited = editInteractively(allSecrets)
 
