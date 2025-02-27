@@ -5,8 +5,11 @@ import os
 import subprocess
 import sys
 import tempfile
+from copy import deepcopy
 
 import yaml
+
+IS_TOUCHED = "touchedBySecretSeal"
 
 
 def run(cmd, input_data=None):
@@ -32,16 +35,16 @@ def printColorful(text, color):
     print(f"{colors[color]}{text}{colors['end']}")
 
 
-def sealSecret(secret_yaml, cert_file):
+def sealSecret(secretYaml, cert_file):
     """Use kubeseal to encrypt the secret."""
     # Write the secret YAML to a temporary file
-    with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp_secret:
-        tmp_secret.write(secret_yaml)
-        tmp_secret_path = tmp_secret.name
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmpSecretFile:
+        tmpSecretFile.write(secretYaml)
+        tmpSecretPath = tmpSecretFile.name
 
-    cmd = ["kubeseal", "--cert", cert_file, "-o", "yaml", "-f", tmp_secret_path]
+    cmd = ["kubeseal", "--cert", cert_file, "-o", "yaml", "-f", tmpSecretPath]
     result = run(cmd)
-    os.unlink(tmp_secret_path)  # remove temporary file
+    os.unlink(tmpSecretPath)  # remove temporary file
     return result.stdout
 
 
@@ -84,12 +87,13 @@ def encodeDataFields(secrets):
 
 
 def editInteractively(secrets):
-    """Edit the secrets interactively."""
-    # if there is one secret containing json data, ask to only edit that key
-    result = []
+    """Edit the secrets interactively"""
+    fileEndingsToIsolate = [".json", ".xml"]
+    originalSecrets = deepcopy(secrets)
+    secretsToModify = deepcopy(secrets)
     oneEdited = False
     editNoMore = False
-    for secret in secrets:
+    for secret in secretsToModify:
         for key, value in secret["data"].items():
             if not editNoMore:
                 if oneEdited:
@@ -98,24 +102,15 @@ def editInteractively(secrets):
                         editNoMore = True
                         break
 
-                if key.endswith(".json"):
-                    print(f"Found JSON data \033[1m{key}\033[0m in secret {secret['metadata']['name']}")
+                fileEnding = next((e for e in fileEndingsToIsolate if key.endswith(e)), None)
+                if fileEnding:
+                    print(f"Found formatted data \033[1m{key}\033[0m in secret {secret['metadata']['name']}")
                     answer = input("Edit this key isolated? (y/N) ")
                     if answer.lower() == "y":
-                        edited = editFile(value, fileEnding=".json")
+                        edited = editFile(value, fileEnding=fileEnding)
                         secret["data"][key] = edited
                         oneEdited = True
 
-                elif key.endswith(".xml"):
-                    print(f"Found XML data \033[1m{key}\033[0m in secret {secret['metadata']['name']}")
-                    answer = input("Edit this key isolated? (y/N) ")
-                    if answer.lower() == "y":
-                        edited = editFile(value, fileEnding=".xml")
-                        secret["data"][key] = edited
-                        oneEdited = True
-        result.append(secret)
-
-    yamlString = yaml.safe_dump_all(result, sort_keys=False)
 
     editWholeFile = True
     if oneEdited:
@@ -123,9 +118,30 @@ def editInteractively(secrets):
         editWholeFile = answer.lower() == "y"
 
     if editWholeFile:
-        return editFile(yamlString, fileEnding=".yaml")
+        modifiedAsYaml = yaml.safe_dump_all(secretsToModify, sort_keys=False)
+        secretsToModify = yaml.safe_load_all(editFile(modifiedAsYaml))
 
-    return yamlString
+    return markModifiedSecrets(secretsToModify, originalSecrets)
+
+
+def markModifiedSecrets(modifiedSecrets, originalSecrets):
+    """Mark secrets as touched if they were edited"""
+    newSecrets = []
+    for secret in modifiedSecrets:
+        name = secret["metadata"]["name"]
+        namespace = secret["metadata"]["namespace"]
+        oldSecret = next((s for s in originalSecrets if
+                          s["metadata"]["name"] == name
+                          and s["metadata"]["namespace"] == namespace), None)
+        for key in secret.get("data", {}):
+            if oldSecret["data"].get(key) != secret["data"].get(key):
+                secret[IS_TOUCHED] = True
+                break
+        newSecrets.append(secret)
+
+    dump = yaml.safe_dump_all(newSecrets, sort_keys=False)
+    return dump
+
 
 
 def editFile(initialContent, fileEnding=".yaml"):
@@ -137,11 +153,11 @@ def editFile(initialContent, fileEnding=".yaml"):
         tmp.flush()
     # Open the editor
     subprocess.call([editor, tmpPath])
-    # After editing, read the file back.
+    # After editing, read the file back
     with open(tmpPath, "r") as f:
-        edited_content = f.read()
+        editedContent = f.read()
     os.unlink(tmpPath)
-    return edited_content
+    return editedContent
 
 
 def getSecretsFromK8s(secrets):
@@ -195,16 +211,16 @@ def edit(args):
             printColorful(f"Error parsing YAML: {e}", 'red')
             sys.exit(1)
 
-    secretsArray = []
+    originalSealedSecrets = []
     for secret in secrets:
         if secret.get("kind") == "SealedSecret":
-            secretsArray.append(secret)
+            originalSealedSecrets.append(secret)
 
-    if not any(secretsArray):
+    if not any(originalSealedSecrets):
         printColorful("No secrets found in the YAML file.", 'red')
         sys.exit(1)
 
-    allSecrets = getSecretsFromK8s(secretsArray)
+    allSecrets = getSecretsFromK8s(originalSealedSecrets)
 
     edited = editInteractively(allSecrets)
 
@@ -215,16 +231,25 @@ def edit(args):
         printColorful(f"Error: {e}", 'red')
         sys.exit(1)
 
-    # Dump the updated secret YAML
-    encoded = encodeDataFields(editedSecret)
-    updatedYaml = yaml.safe_dump_all(encoded, sort_keys=False)
-
-    # Encrypt the updated secret using kubeseal
-    sealed = sealSecret(updatedYaml, certFile)
-
-    # Overwrite the original file with the sealed secret
     with open(sealedSecretsFile, "w") as f:
-        f.write(sealed)
+        secretsToWrite = []
+        for secret in encodeDataFields(editedSecret):
+            name = secret["metadata"]["name"]
+            namespace = secret["metadata"]["namespace"]
+            touched = secret.get(IS_TOUCHED)
+            originalSecret = next((s for s in originalSealedSecrets if
+                                   s["metadata"]["name"] == name
+                                   and s["metadata"]["namespace"] == namespace))
+            if touched:
+                modifiedSecret = sealSecret(yaml.safe_dump(secret), certFile)
+                modifiedEncryptedData = yaml.safe_load(modifiedSecret)["spec"]["encryptedData"]
+                originalSecret["spec"]["encryptedData"] = modifiedEncryptedData
+
+            secretsToWrite.append(originalSecret)
+
+        dump = yaml.safe_dump_all(secretsToWrite, sort_keys=False)
+        f.write(dump)
+        f.flush()
 
     print(f"Sealed secret updated in '{sealedSecretsFile}'.")
 
