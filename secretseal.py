@@ -97,14 +97,14 @@ def editInteractively(secrets):
         for key, value in secret["data"].items():
             if not editNoMore:
                 if oneEdited:
-                    answer = input("Edit further keys isolated? (Y/n) ")
-                    if answer.lower() == "n":
+                    answer = input("Edit further keys isolated? (y/N) ")
+                    if answer.lower() != "y":
                         editNoMore = True
                         break
 
                 fileEnding = next((e for e in fileEndingsToIsolate if key.endswith(e)), None)
                 if fileEnding:
-                    print(f"Found formatted data \033[1m{key}\033[0m in secret {secret['metadata']['name']}")
+                    printColorful(f"Found formatted data \033[1m{key} in secret {secret['metadata']['name']}", 'blue')
                     answer = input("Edit this key isolated? (y/N) ")
                     if answer.lower() == "y":
                         edited = editFile(value, fileEnding=fileEnding)
