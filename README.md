@@ -20,7 +20,7 @@ Annoyed of handling sealed secrets in your kubernetes cluster? This tool is for 
 ## Requirements
 
 - kubectl
-- [kubeseal](https://github.com/bitnami-labs/sealed-secrets/blob/main/docs/developer/kubeseal.md)
+- [kubeseal](https://github.com/bitnami-labs/sealed-secrets/blob/main/docs/developer/kubeseal.md) > 0.24.1
 - python3
 
 ## Basic usage
